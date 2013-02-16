@@ -1,0 +1,67 @@
+#!/bin/sh
+DB_ADMIN=postgres
+FIELD_TYPE=json
+
+while [ "$1" != "" ]:
+do
+    case $1 in
+        -d)
+            DB_NAME=$2
+            shift 2
+            ;;
+        -U | -u)
+            DB_USER=$2
+            shift 2
+            ;;
+        -a)
+            DB_ADMIN=$2
+            shift 2
+            ;;
+        -t)
+            FIELD_TYPE=$2
+            shift 2
+            ;;
+        *)
+            break
+            ;;
+    esac
+done
+
+if [ "$DB_NAME" = "" ] || [ "$DB_USER" = "" ] || [ "$DB_ADMIN" = "" ]; then
+    echo "USAGE: build -d DATABASE -u USER [-a ADMIN_USER] [-t FIELD_TYPE]"
+    echo
+    echo "       ADMIN_USER defaults to postgres"
+    echo "       FIELD_TYPE defaults to json"
+    exit 1
+fi
+
+echo "> Build library..."
+if [ `uname` = "Linux" ]; then
+    cc -fpic -c json.c -I`pg_config --includedir-server`
+    cc -shared -o json.so json.o
+elif [ `uname` = "FreeBSD" ]; then
+    gcc -fpic -c json.c -I`pg_config --includedir-server`
+    gcc -shared -o json.so json.o
+elif [ `uname` = "Darwin" ]; then
+    cc -c json.c -I`pg_config --includedir-server`
+    cc -bundle -flat_namespace -undefined suppress -o json.so json.o
+else
+    echo "Dunno how to build in your OS."
+    echo "Go to http://www.postgresql.org/docs/9.2/static/xfunc-c.html#DFUNC and find it out!"
+    exit 1
+fi
+
+echo "> Create functions..."
+PWD=`pwd`
+echo "
+    create or replace function json_int($FIELD_TYPE,text) returns integer as
+        '$PWD/json', 'json_int' language c immutable strict cost 1;
+    create or replace function json_bool($FIELD_TYPE,text) returns boolean as
+        '$PWD/json', 'json_bool' language c immutable strict cost 1;
+    create or replace function json_string($FIELD_TYPE,text) returns varchar as
+        '$PWD/json', 'json_string' language c immutable strict cost 1;
+
+    alter function json_int($FIELD_TYPE, text) owner to $DB_USER;
+    alter function json_bool($FIELD_TYPE, text) owner to $DB_USER;
+    alter function json_string($FIELD_TYPE, text) owner to $DB_USER;
+" | psql -d $DB_NAME -U $DB_ADMIN
