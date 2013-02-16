@@ -58,6 +58,8 @@ char *get_value_start(text *json, text *key)
             (*quote_end == '"')
         ) {
             char *value_pos = quote_end + 1;
+            // NOTE: could pass json_end here and return pointer to unallocated memory
+            //       (will be ok with valid JSON)
             while (value_pos < json_end && (*value_pos == ':' || *value_pos == ' ' ||
                    *value_pos == '\n' || *value_pos == '\r')) value_pos++;
             return value_pos;
@@ -79,6 +81,8 @@ json_int(PG_FUNCTION_ARGS)
     if (pos == NULL) {
         PG_RETURN_NULL();
     } else {
+        // NOTE: this is unsafe, should check if data ends
+        //       should work with valid JSON though
         if (memchr("0123456789-", *pos, 11)) {
             PG_RETURN_INT32(atoi(pos));
         } else {
