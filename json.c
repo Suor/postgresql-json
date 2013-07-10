@@ -67,6 +67,7 @@ char *get_value_start(text *json, text *key)
             pos++;
         }
     }
+    return NULL;
 }
 
 
